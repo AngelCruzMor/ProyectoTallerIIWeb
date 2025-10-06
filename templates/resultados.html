@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultados de la Entrevista</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            text-align: center;
+            background-color: #f0f2f5;
+            padding-top: 50px;
+            margin: 0;
+        }
+
+        .chart-container {
+            width: 90%;
+            max-width: 750px;
+            margin: 30px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 12px 25px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: 500;
+        }
+
+        a:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Resumen Emocional de la Entrevista</h1>
+
+    <div class="chart-container">
+        <canvas id="emotionChart"></canvas>
+    </div>
+
+    <a href="/logout">Finalizar y Salir</a>
+
+    <script>
+        // 2. Obtenemos los datos que Flask nos pasó, usando el filtro |safe
+        const emocionData = JSON.parse('{{ resumen_emociones | tojson | safe }}');
+        const ctx = document.getElementById('emotionChart').getContext('2d');
+
+        // 3. Creamos la gráfica con los datos
+        const emotionChart = new Chart(ctx, {
+            type: 'bar', // Tipo de gráfica: barras
+            data: {
+                labels: Object.keys(emocionData), // Nombres de las emociones
+                datasets: [{
+                    label: 'Número de Detecciones',
+                    data: Object.values(emocionData), // El conteo de cada emoción
+                    backgroundColor: [
+                        'rgba(255, 206, 86, 0.7)', // happy
+                        'rgba(54, 162, 235, 0.7)', // sad
+                        'rgba(255, 99, 132, 0.7)',  // angry
+                        'rgba(153, 102, 255, 0.7)',// fear
+                        'rgba(201, 203, 207, 0.7)',// neutral
+                        'rgba(75, 192, 192, 0.7)',  // surprise
+                        'rgba(255, 159, 64, 0.7)'  // disgust
+                    ],
+                    borderColor: 'rgba(255, 255, 255, 0.1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1 // Asegura que el eje Y vaya de 1 en 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false // No necesitamos la leyenda con una sola barra de datos
+                    },
+                    title: {
+                        display: true,
+                        text: 'Frecuencia de Emociones Detectadas'
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+
+</html>

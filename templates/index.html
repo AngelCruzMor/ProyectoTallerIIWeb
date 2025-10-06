@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Entrevista Virtual con IA</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+        }
+
+        #main-container {
+            display: flex;
+            gap: 30px;
+            align-items: flex-start;
+        }
+
+        #video-container {
+            width: 500px;
+            height: 375px;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1);
+        }
+
+        #interview-panel {
+            width: 400px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-box {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+        }
+
+        h2 {
+            margin-top: 0;
+        }
+
+        /* NUEVO: Estilos para el temporizador */
+        #timer-box {
+            font-size: 1.2em;
+            color: #dc3545;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Entrevista Virtual con IA 🤖</h1>
+
+    <div id="main-container">
+        <div id="video-container">
+            <video id="video" autoplay playsinline></video>
+        </div>
+        <div id="interview-panel">
+            <button id="startButton">Comenzar Entrevista</button>
+            <div id="emotion-box" class="info-box"><strong>Emoción Detectada:</strong> <span
+                    id="emotion-status">...</span></div>
+            <div id="timer-box" class="info-box"><strong>Tiempo para responder:</strong> <span
+                    id="timer-status">...</span></div>
+            <div id="question-box" class="info-box"><strong>Pregunta:</strong> <span id="question-text">...</span></div>
+            <div id="answer-box" class="info-box"><strong>Tu Respuesta:</strong> <span id="answer-text">...</span></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Referencias a elementos HTML ---
+        const videoElement = document.getElementById('video');
+        const startButton = document.getElementById('startButton');
+        const emotionStatus = document.getElementById('emotion-status');
+        const questionText = document.getElementById('question-text');
+        const answerText = document.getElementById('answer-text');
+        const timerStatus = document.getElementById('timer-status'); // NUEVO: Referencia al temporizador
+
+        let analysisInterval;
+        let countdownInterval; // NUEVO: Variable para el intervalo del temporizador
+
+        // --- Configuración de APIs del Navegador ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'es-ES';
+        recognition.interimResults = false;
+
+        // --- Lógica Principal ---
+        startButton.addEventListener('click', startInterview);
+
+        async function startInterview() {
+            startButton.disabled = true;
+            startButton.textContent = "Entrevista en curso...";
+            startCameraAndAnalysis();
+            await askNextQuestion();
+        }
+
+        async function askNextQuestion() {
+            answerText.textContent = "..."; // Limpiar respuesta anterior
+            timerStatus.textContent = "..."; // Limpiar temporizador anterior
+
+            try {
+                const response = await fetch('/get-pregunta');
+                const data = await response.json();
+
+                questionText.textContent = data.pregunta;
+                speak(data.pregunta, () => { // Pasamos una función callback a speak
+                    if (!data.fin) {
+                        // Cuando termine de hablar, iniciamos el proceso de escucha con retraso
+                        startListeningSequence();
+                    } else {
+                        // Fin de la entrevista
+                        stopCameraAndAnalysis();
+                        startButton.textContent = "Entrevista Finalizada";
+                        window.location.href = data.url_resultados;
+
+                    }
+                });
+            } catch (error) {
+                console.error("Error al obtener pregunta:", error);
+            }
+        }
+
+        // --- Funciones de Soporte ---
+        function speak(text, onEndCallback) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'es-ES';
+            // Cuando termine de hablar, ejecutamos el callback
+            utterance.onend = onEndCallback;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // NUEVO: Secuencia completa de espera, temporizador y escucha
+        function startListeningSequence() {
+            questionText.textContent += " (Prepárate para responder...)";
+            // 1. Espera 3 segundos antes de mostrar el temporizador
+            setTimeout(() => {
+                // 2. Inicia el temporizador de 7 segundos y la grabación
+                startCountdown(7);
+                recognition.start();
+            }, 3000); // 3 segundos de retraso
+        }
+
+        // NUEVO: Función para el temporizador visual
+        function startCountdown(duration) {
+            let timer = duration;
+            timerStatus.textContent = `${timer} segundos`;
+
+            countdownInterval = setInterval(() => {
+                timer--;
+                timerStatus.textContent = `${timer} segundos`;
+                if (timer <= 0) {
+                    clearInterval(countdownInterval);
+                    timerStatus.textContent = "Tiempo terminado.";
+                }
+            }, 1000);
+        }
+
+        recognition.onresult = (event) => {
+            clearInterval(countdownInterval); // Detener el temporizador si el usuario responde
+            const last = event.results.length - 1;
+            const transcript = event.results[last][0].transcript;
+            answerText.textContent = transcript;
+            setTimeout(askNextQuestion, 2000); // Espera 2 segundos antes de la siguiente pregunta
+        };
+
+        recognition.onspeechend = () => {
+            recognition.stop();
+        };
+
+        recognition.onerror = (event) => {
+            clearInterval(countdownInterval); // Detener el temporizador si hay un error
+            if (event.error !== 'no-speech') {
+                answerText.textContent = "Error en el reconocimiento. Pasando a la siguiente pregunta...";
+            } else {
+                answerText.textContent = "No se detectó respuesta. Pasando a la siguiente pregunta...";
+            }
+            setTimeout(askNextQuestion, 3000);
+        };
+
+        // --- Lógica de la Cámara y Emociones (sin cambios) ---
+        async function startCameraAndAnalysis() { /* ...código sin cambios... */ }
+        function stopCameraAndAnalysis() { /* ...código sin cambios... */ }
+        async function analyzeFrame() { /* ...código sin cambios... */ }
+
+        // --- PEGAR CÓDIGO SIN CAMBIOS AQUÍ ---
+        async function startCameraAndAnalysis() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                videoElement.srcObject = stream;
+                videoElement.onplaying = () => {
+                    analysisInterval = setInterval(analyzeFrame, 2000);
+                };
+            } catch (err) { console.error("Error al acceder a la cámara:", err); }
+        }
+
+        function stopCameraAndAnalysis() {
+            clearInterval(analysisInterval);
+            if (videoElement.srcObject) {
+                videoElement.srcObject.getTracks().forEach(track => track.stop());
+            }
+        }
+
+        async function analyzeFrame() {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            const context = canvas.getContext('2d');
+            context.translate(canvas.width, 0);
+            context.scale(-1, 1);
+            context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+            const imageDataURL = canvas.toDataURL('image/jpeg');
+
+            try {
+                const response = await fetch('/analizar_emocion', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageDataURL }),
+                });
+                const result = await response.json();
+                emotionStatus.textContent = result.emocion.charAt(0).toUpperCase() + result.emocion.slice(1);
+            } catch (error) { console.error('Error durante el análisis:', error); }
+        }
+    </script>
+</body>
+
+</html>
